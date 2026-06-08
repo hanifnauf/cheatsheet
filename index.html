@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Hydroponic IoT</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <nav class="navbar">
+    <h2>SmartHydro</h2>
+    <ul>
+      <li><a href="#home">Home</a></li>
+      <li><a href="#fitur">Fitur</a></li>
+      <li><a href="#komponen">Komponen</a></li>
+      <li><a href="#diagram">Diagram</a></li>
+      <li><a href="#coding">Coding</a></li>
+      <li><a href="#pengujian">Pengujian</a></li>
+    </ul>
+  </nav>
+
+  <section class="hero" id="home">
+    <div>
+      <h1>Smart Hydroponic Berbasis IoT</h1>
+      <p>
+        Sistem monitoring dan kontrol pompa otomatis menggunakan ESP8266,
+        DHT11, HC-SR04, MQTT, n8n, Telegram, dan ThingSpeak.
+      </p>
+
+      <div class="hero-buttons">
+        <a href="#coding" class="btn btn-primary">Lihat Coding</a>
+        <a href="#diagram" class="btn btn-secondary">Lihat Diagram</a>
+      </div>
+    </div>
+
+    <div class="hero-card">
+      <h3>Status Sistem</h3>
+      <div class="status-box">Suhu: 30°C</div>
+      <div class="status-box">Kelembaban: 70%</div>
+      <div class="status-box">Level Air: 45%</div>
+      <div class="status-box">Pompa: AUTO</div>
+    </div>
+  </section>
+
+  <section id="tentang">
+    <div class="section-title">
+      <h2>Tentang Project</h2>
+      <p>Penjelasan singkat mengenai sistem Smart Hydroponic.</p>
+    </div>
+
+    <div class="card">
+      <p>
+        Smart Hydroponic adalah sistem IoT yang digunakan untuk memantau suhu,
+        kelembaban, dan ketinggian air pada sistem hidroponik. Sistem ini dapat
+        mengontrol pompa secara otomatis berdasarkan level air, serta dapat
+        dikontrol manual melalui Telegram menggunakan n8n dan MQTT.
+      </p>
+    </div>
+  </section>
+
+  <section id="fitur">
+    <div class="section-title">
+      <h2>Fitur Sistem</h2>
+      <p>Fitur utama yang terdapat pada project.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Monitoring Sensor</h3>
+        <p>Membaca suhu, kelembaban, jarak air, dan level air secara berkala.</p>
+        <span class="tag">DHT11 + HC-SR04</span>
+      </div>
+
+      <div class="card">
+        <h3>Kontrol Pompa</h3>
+        <p>Pompa dapat menyala otomatis saat air rendah dan mati saat air cukup.</p>
+        <span class="tag">Relay</span>
+      </div>
+
+      <div class="card">
+        <h3>WiFi Manager</h3>
+        <p>Mengatur SSID dan password WiFi tanpa perlu mengubah coding.</p>
+        <span class="tag">192.168.4.1</span>
+      </div>
+
+      <div class="card">
+        <h3>Telegram Control</h3>
+        <p>Mengontrol pompa dengan perintah ON, OFF, AUTO, dan RESET_WIFI.</p>
+        <span class="tag">n8n + MQTT</span>
+      </div>
+
+      <div class="card">
+        <h3>ThingSpeak</h3>
+        <p>Menampilkan data sensor dalam bentuk dashboard monitoring online.</p>
+        <span class="tag">Dashboard</span>
+      </div>
+
+      <div class="card">
+        <h3>Emergency Alert</h3>
+        <p>Memberikan peringatan jika air rendah, suhu tinggi, atau kelembaban tidak normal.</p>
+        <span class="tag">n8n</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="komponen">
+    <div class="section-title">
+      <h2>Komponen</h2>
+      <p>Daftar komponen yang digunakan.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card"><h3>ESP8266 NodeMCU</h3><p>Mikrokontroler utama sistem.</p></div>
+      <div class="card"><h3>DHT11</h3><p>Sensor suhu dan kelembaban.</p></div>
+      <div class="card"><h3>HC-SR04</h3><p>Sensor ultrasonic untuk membaca jarak air.</p></div>
+      <div class="card"><h3>Relay</h3><p>Saklar elektronik untuk mengontrol pompa.</p></div>
+      <div class="card"><h3>Pompa Air</h3><p>Mengalirkan air pada sistem hidroponik.</p></div>
+      <div class="card"><h3>LED Indikator</h3><p>Menampilkan status MQTT dan pompa.</p></div>
+    </div>
+  </section>
+
+  <section id="pin">
+    <div class="section-title">
+      <h2>Pin Mapping</h2>
+      <p>Tabel koneksi pin ESP8266.</p>
+    </div>
+
+    <div class="table-box">
+      <table>
+        <thead>
+          <tr>
+            <th>Komponen</th>
+            <th>Pin NodeMCU</th>
+            <th>GPIO</th>
+            <th>Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>DHT11</td>
+            <td>D5</td>
+            <td>GPIO14</td>
+            <td>Input suhu dan kelembaban</td>
+          </tr>
+          <tr>
+            <td>Relay Pompa</td>
+            <td>D1</td>
+            <td>GPIO5</td>
+            <td>Output kontrol pompa</td>
+          </tr>
+          <tr>
+            <td>HC-SR04 TRIG</td>
+            <td>D0</td>
+            <td>GPIO16</td>
+            <td>Output trigger ultrasonic</td>
+          </tr>
+          <tr>
+            <td>HC-SR04 ECHO</td>
+            <td>D2</td>
+            <td>GPIO4</td>
+            <td>Input echo ultrasonic lewat pembagi tegangan</td>
+          </tr>
+          <tr>
+            <td>LED MQTT</td>
+            <td>D6</td>
+            <td>GPIO12</td>
+            <td>Indikator koneksi MQTT</td>
+          </tr>
+          <tr>
+            <td>LED Pompa OFF</td>
+            <td>D7</td>
+            <td>GPIO13</td>
+            <td>Indikator pompa mati</td>
+          </tr>
+          <tr>
+            <td>LED Pompa ON</td>
+            <td>D8</td>
+            <td>GPIO15</td>
+            <td>Indikator pompa menyala</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="diagram">
+    <div class="section-title">
+      <h2>Diagram Project</h2>
+      <p>Tempat untuk menampilkan wiring, diagram blok, interfacing, dan flowchart.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Wiring Diagram</h3>
+        <div class="diagram-area">
+        <img src="wiring.png" alt="Wiring Diagram">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Diagram Blok</h3>
+        <div class="diagram-area">
+            <img src="blok1.png" alt="Diagram Blok">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Diagram Interfacing</h3>
+        <div class="diagram-area">
+            <img src="interfacing1.png" alt="Diagram Interfacing">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Flowchart</h3>
+        <div class="diagram-area">
+            <img src="flowchart.png" alt="Flowchart">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="alur">
+    <div class="section-title">
+      <h2>Alur Kerja Sistem</h2>
+      <p>Urutan kerja program Smart Hydroponic.</p>
+    </div>
+
+    <div class="alur">
+      <div class="step">Mulai</div>
+      <div class="step">Cek WiFi</div>
+      <div class="step">Koneksi MQTT</div>
+      <div class="step">Baca Sensor</div>
+      <div class="step">Hitung Level Air</div>
+      <div class="step">Kontrol Pompa</div>
+      <div class="step">Kirim Data</div>
+      <div class="step">Cek Telegram</div>
+      <div class="step">Ulangi</div>
+    </div>
+  </section>
+
+  <section id="coding">
+    <div class="section-title">
+      <h2>Coding Project</h2>
+      <p>Materi coding sudah dipisah per fungsi agar mudah dipelajari sebelum exam.</p>
+    </div>
+
+    <div class="grid code-card-grid">
+      <a class="card code-link-card" href="esp-ultrasonic.html">
+        <span class="code-label">Sensor</span>
+        <h3>ESP Ultrasonic</h3>
+        <p>Pembacaan DHT11, HC-SR04, hitung level air, dan kontrol relay pompa otomatis.</p>
+      </a>
+
+      <a class="card code-link-card" href="mqtt-control.html">
+        <span class="code-label">MQTT</span>
+        <h3>MQTT Control</h3>
+        <p>Koneksi broker, subscribe command Telegram, publish JSON data sensor, dan reconnect MQTT.</p>
+      </a>
+
+      <a class="card code-link-card" href="thingspeak.html">
+        <span class="code-label">Dashboard</span>
+        <h3>ThingSpeak</h3>
+        <p>Pengiriman suhu, kelembaban, level air, status pompa, dan mode ke field ThingSpeak.</p>
+      </a>
+
+      <a class="card code-link-card" href="n8n-code.html">
+        <span class="code-label">Automation</span>
+        <h3>n8n Code</h3>
+        <p>Function node untuk format pesan monitoring, alert, dan mapping command Telegram ke MQTT.</p>
+      </a>
+
+      <a class="card code-link-card" href="n8n-mqtt-processing.html">
+        <span class="code-label">Processing</span>
+        <h3>n8n MQTT Processing</h3>
+        <p>Code JavaScript untuk parse payload MQTT, validasi sensor, dan membuat status emergency.</p>
+      </a>
+
+      <a class="card code-link-card" href="device-test.html">
+        <span class="code-label">Testing</span>
+        <h3>Device Test</h3>
+        <p>Coding test terpisah untuk HC-SR04, DHT11, relay, dan LED indikator sebelum program digabung.</p>
+      </a>
+
+      <a class="card code-link-card" href="credentials-config.html">
+        <span class="code-label">Config</span>
+        <h3>Credential Config</h3>
+        <p>Template konfigurasi untuk MQTT, ThingSpeak, dan Telegram agar credential mudah diganti.</p>
+      </a>
+
+      <a class="card code-link-card highlight-card" href="all-coding.html">
+        <span class="code-label">Gabungan</span>
+        <h3>Semua Coding</h3>
+        <p>Satu halaman khusus berisi main ESP dan n8n code, tanpa menggabungkan WiFi Manager.</p>
+      </a>
+
+      <a class="card code-link-card" href="wifi-manager.html">
+        <span class="code-label">WiFi</span>
+        <h3>WiFi Manager</h3>
+        <p>Portal setup SSID dan password di 192.168.4.1. Tetap dibuat sebagai satu file khusus.</p>
+      </a>
+    </div>
+  </section>
+
+  <section id="pengujian">
+    <div class="section-title">
+      <h2>Pengujian Sistem</h2>
+      <p>Contoh tabel hasil pengujian project.</p>
+    </div>
+
+    <div class="table-box">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Pengujian</th>
+            <th>Hasil</th>
+            <th>Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>ESP8266 konek WiFi</td>
+            <td>Berhasil</td>
+            <td>ESP mendapat IP dari router</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>DHT11 membaca suhu</td>
+            <td>Berhasil</td>
+            <td>Data suhu tampil di serial monitor</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>HC-SR04 membaca jarak</td>
+            <td>Berhasil</td>
+            <td>Jarak air tampil dalam cm</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Pompa ON/OFF</td>
+            <td>Berhasil</td>
+            <td>Relay dapat mengontrol pompa</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Data masuk MQTT</td>
+            <td>Berhasil</td>
+            <td>Payload diterima n8n</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>Dashboard ThingSpeak</td>
+            <td>Berhasil</td>
+            <td>Data tampil pada grafik</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="troubleshooting">
+    <div class="section-title">
+      <h2>Troubleshooting</h2>
+      <p>Masalah yang sering terjadi dan solusinya.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>ESP MemoryError</h3>
+        <p>Simpan coding sebagai main.py di ESP8266, jangan terus-menerus Run dari Thonny.</p>
+      </div>
+
+      <div class="card">
+        <h3>192.168.4.1 Tidak Bisa Dibuka</h3>
+        <p>Pastikan HP/laptop sudah konek ke hotspot SmartHydro-Setup.</p>
+      </div>
+
+      <div class="card">
+        <h3>Pompa Tidak Mati</h3>
+        <p>Cek relay aktif LOW/HIGH dan pastikan kabel relay memakai COM dan NO.</p>
+      </div>
+
+      <div class="card">
+        <h3>Ultrasonic Tidak Terbaca</h3>
+        <p>Cek pin TRIG/ECHO, GND, dan pembagi tegangan pada pin ECHO.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Smart Hydroponic IoT - ESP8266 | MQTT | n8n | Telegram | ThingSpeak</p>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Device Test - SmartHydro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="code-section">
+    <div class="section-title">
+      <span class="code-label">MicroPython / Testing</span>
+      <h2>Coding Test Device</h2>
+      <p>Kumpulan coding sederhana untuk mengetes HC-SR04, DHT11, relay, dan LED sebelum menjalankan program utama.</p>
+    </div>
+
+    <div class="code-layout">
+      <aside class="code-menu">
+        <a href="esp-ultrasonic.html">ESP Ultrasonic</a>
+        <a href="mqtt-control.html">MQTT Control</a>
+        <a href="thingspeak.html">ThingSpeak</a>
+        <a href="n8n-code.html">n8n Code</a>
+        <a href="n8n-mqtt-processing.html">n8n MQTT Processing</a>
+        <a href="device-test.html" class="active">Device Test</a>
+        <a href="credentials-config.html">Credential Config</a>
+        <a href="all-coding.html">Semua Coding</a>
+        <a href="wifi-manager.html">WiFi Manager</a>
+        <a href="index.html#coding">Kembali Home</a>
+      </aside>
+
+      <article class="code-content">
+        <div class="code-header">
+          <div>
+            <h1>Test Perangkat Satu per Satu</h1>
+            <p>Gunakan file test ini untuk memastikan wiring dan komponen bekerja sebelum digabung ke <strong>main.py</strong>.</p>
+          </div>
+        </div>
+
+        <div class="explain-grid">
+          <div class="explain-card">
+            <h3>HC-SR04</h3>
+            <p>Test jarak ultrasonic dari pin TRIG D0/GPIO16 dan ECHO D2/GPIO4.</p>
+          </div>
+          <div class="explain-card">
+            <h3>DHT11</h3>
+            <p>Test suhu dan kelembaban dari pin D5/GPIO14.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Relay</h3>
+            <p>Test ON/OFF relay pada pin D1/GPIO5. Program memakai relay aktif LOW.</p>
+          </div>
+        </div>
+
+        <h2 class="subheading">1. Test HC-SR04 / Ultrasonic</h2>
+        <div class="notice-box">
+          <h3>Catatan Wiring</h3>
+          <p>Pin ECHO HC-SR04 harus memakai pembagi tegangan karena output ECHO 5V, sedangkan ESP8266 hanya aman menerima 3.3V.</p>
+        </div>
+        <div class="code-box">
+<pre><code>import time
+import machine
+from machine import Pin
+
+TRIG_PIN = Pin(16, Pin.OUT)  # D0 / GPIO16
+ECHO_PIN = Pin(4, Pin.IN)    # D2 / GPIO4
+
+def baca_jarak_once():
+    TRIG_PIN.value(0)
+    time.sleep_us(2)
+
+    TRIG_PIN.value(1)
+    time.sleep_us(10)
+    TRIG_PIN.value(0)
+
+    durasi = machine.time_pulse_us(ECHO_PIN, 1, 30000)
+
+    if durasi &lt; 0:
+        return None
+
+    jarak_cm = durasi / 58
+    return jarak_cm
+
+while True:
+    jarak = baca_jarak_once()
+
+    if jarak is None:
+        print("Ultrasonic gagal membaca jarak")
+    else:
+        print("Jarak HC-SR04:", round(jarak, 1), "cm")
+
+    time.sleep(1)</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan HC-SR04</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>TRIG_PIN</code> dan <code>ECHO_PIN</code></h3>
+              <p><code>TRIG_PIN</code> mengirim sinyal pemicu 10 microsecond. <code>ECHO_PIN</code> menerima pantulan suara dari sensor.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>machine.time_pulse_us(ECHO_PIN, 1, 30000)</code></h3>
+              <p>Baris ini menghitung lama sinyal ECHO bernilai HIGH. Timeout 30000 microsecond mencegah program menunggu terlalu lama jika sensor tidak merespons.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>durasi / 58</code></h3>
+              <p>Rumus ini mengubah waktu pantulan ultrasonic menjadi jarak dalam cm. Jika jarak makin besar, berarti permukaan air makin jauh dari sensor.</p>
+            </div>
+          </div>
+        </section>
+
+        <h2 class="subheading">2. Test DHT11</h2>
+        <div class="code-box">
+<pre><code>import time
+import dht
+from machine import Pin
+
+DHT_PIN = Pin(14)  # D5 / GPIO14
+dht_sensor = dht.DHT11(DHT_PIN)
+
+while True:
+    try:
+        dht_sensor.measure()
+        suhu = dht_sensor.temperature()
+        kelembaban = dht_sensor.humidity()
+
+        print("Suhu:", suhu, "C")
+        print("Kelembaban:", kelembaban, "%")
+        print("--------------------")
+
+    except Exception as e:
+        print("Gagal membaca DHT11:", e)
+
+    time.sleep(2)</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan DHT11</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>dht.DHT11(DHT_PIN)</code></h3>
+              <p>Membuat object sensor DHT11 pada pin D5/GPIO14. Object ini dipakai untuk membaca suhu dan kelembaban.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>dht_sensor.measure()</code></h3>
+              <p>Meminta sensor melakukan pembacaan baru. Setelah baris ini, nilai suhu dan kelembaban bisa diambil.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>time.sleep(2)</code></h3>
+              <p>DHT11 tidak perlu dibaca terlalu cepat. Jeda 2 detik membuat pembacaan lebih stabil.</p>
+            </div>
+          </div>
+        </section>
+
+        <h2 class="subheading">3. Test Relay Pompa</h2>
+        <div class="notice-box">
+          <h3>Keamanan</h3>
+          <p>Jika relay terhubung ke pompa atau tegangan tinggi, pastikan wiring COM/NO benar dan jangan menyentuh kabel saat alat menyala.</p>
+        </div>
+        <div class="code-box">
+<pre><code>import time
+from machine import Pin
+
+RELAY_PIN = Pin(5, Pin.OUT)  # D1 / GPIO5
+
+RELAY_ON = 0
+RELAY_OFF = 1
+
+while True:
+    print("Relay ON")
+    RELAY_PIN.value(RELAY_ON)
+    time.sleep(3)
+
+    print("Relay OFF")
+    RELAY_PIN.value(RELAY_OFF)
+    time.sleep(3)</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan Relay</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>RELAY_ON = 0</code></h3>
+              <p>Relay module pada project ini aktif LOW. Nilai 0 menyalakan relay, sedangkan nilai 1 mematikan relay.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>time.sleep(3)</code></h3>
+              <p>Relay dinyalakan 3 detik dan dimatikan 3 detik agar perubahan mudah diamati dari suara klik relay atau LED indikator relay.</p>
+            </div>
+          </div>
+        </section>
+
+        <h2 class="subheading">4. Test LED Indikator</h2>
+        <div class="code-box">
+<pre><code>import time
+from machine import Pin
+
+LED_MQTT = Pin(12, Pin.OUT)       # D6 / GPIO12
+LED_POMPA_OFF = Pin(13, Pin.OUT)  # D7 / GPIO13
+LED_POMPA_ON = Pin(15, Pin.OUT)   # D8 / GPIO15
+
+while True:
+    print("Test LED MQTT")
+    LED_MQTT.value(1)
+    LED_POMPA_OFF.value(0)
+    LED_POMPA_ON.value(0)
+    time.sleep(1)
+
+    print("Test LED Pompa OFF")
+    LED_MQTT.value(0)
+    LED_POMPA_OFF.value(1)
+    LED_POMPA_ON.value(0)
+    time.sleep(1)
+
+    print("Test LED Pompa ON")
+    LED_MQTT.value(0)
+    LED_POMPA_OFF.value(0)
+    LED_POMPA_ON.value(1)
+    time.sleep(1)</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Urutan Test yang Disarankan</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3>1. Test DHT11</h3>
+              <p>Pastikan suhu dan kelembaban muncul di serial monitor.</p>
+            </div>
+            <div class="detail-item">
+              <h3>2. Test HC-SR04</h3>
+              <p>Gerakkan tangan atau objek di depan sensor. Nilai jarak harus berubah.</p>
+            </div>
+            <div class="detail-item">
+              <h3>3. Test Relay</h3>
+              <p>Pastikan relay berbunyi klik dan LED relay berubah saat ON/OFF.</p>
+            </div>
+            <div class="detail-item">
+              <h3>4. Test LED</h3>
+              <p>Pastikan LED MQTT, LED Pompa OFF, dan LED Pompa ON sesuai pin mapping.</p>
+            </div>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+</body>
+</html>

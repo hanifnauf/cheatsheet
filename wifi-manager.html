@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WiFi Manager - SmartHydro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="code-section">
+    <div class="section-title">
+      <span class="code-label">MicroPython / WiFi</span>
+      <h2>Coding WiFi Manager</h2>
+      <p>File ini tetap menjadi satu halaman khusus karena dipakai sebagai modul <strong>wifimgr.py</strong>.</p>
+    </div>
+
+    <div class="code-layout">
+      <aside class="code-menu">
+        <a href="esp-ultrasonic.html">ESP Ultrasonic</a>
+        <a href="mqtt-control.html">MQTT Control</a>
+        <a href="thingspeak.html">ThingSpeak</a>
+        <a href="n8n-code.html">n8n Code</a>
+        <a href="n8n-mqtt-processing.html">n8n MQTT Processing</a>
+        <a href="device-test.html">Device Test</a>
+        <a href="credentials-config.html">Credential Config</a>
+        <a href="all-coding.html">Semua Coding</a>
+        <a class="active" href="wifi-manager.html">WiFi Manager</a>
+        <a href="index.html#coding">Kembali Home</a>
+      </aside>
+
+      <article class="code-content">
+        <div class="code-header">
+          <div>
+            <h1>Portal Setup WiFi ESP8266</h1>
+            <p>Jika ESP belum punya konfigurasi WiFi, modul ini membuat hotspot <strong>SmartHydro-Setup</strong> dan halaman setup di <strong>192.168.4.1</strong>.</p>
+          </div>
+        </div>
+
+        <div class="explain-grid">
+          <div class="explain-card">
+            <h3>Simpan Config</h3>
+            <p>SSID dan password disimpan ke <code>wifi_config.json</code>, sehingga coding utama tidak perlu diubah saat pindah jaringan.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Mode AP</h3>
+            <p>Jika koneksi gagal, ESP membuat access point untuk menerima input WiFi baru dari browser.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Reset WiFi</h3>
+            <p>Command <code>RESET_WIFI</code> dari MQTT dapat memanggil <code>delete_wifi_config()</code>, lalu ESP restart dan masuk mode setup lagi.</p>
+          </div>
+        </div>
+
+        <div class="code-box">
+<pre><code>import network
+import time
+import ujson
+import socket
+import os
+import gc
+import machine
+from machine import Pin
+
+CONFIG_FILE = "wifi_config.json"
+AP_SSID = "SmartHydro-Setup"
+AP_PASSWORD = "12345678"
+WIFI_TIMEOUT = 20
+
+def url_decode(text):
+    text = text.replace("+", " ")
+    result = ""
+    i = 0
+
+    while i &lt; len(text):
+        if text[i] == "%" and i + 2 &lt; len(text):
+            try:
+                result += chr(int(text[i + 1:i + 3], 16))
+                i += 3
+            except ValueError:
+                result += text[i]
+                i += 1
+        else:
+            result += text[i]
+            i += 1
+
+    return result
+
+def get_param(query, name):
+    items = query.split("&amp;")
+    for item in items:
+        if "=" in item:
+            key, value = item.split("=", 1)
+            if key == name:
+                return url_decode(value)
+    return ""
+
+def load_wifi_config():
+    try:
+        with open(CONFIG_FILE, "r") as file:
+            data = ujson.load(file)
+        ssid = data.get("ssid", "")
+        password = data.get("password", "")
+        if ssid != "":
+            return ssid, password
+    except OSError:
+        pass
+    return None, None
+
+def save_wifi_config(ssid, password):
+    with open(CONFIG_FILE, "w") as file:
+        ujson.dump({"ssid": ssid, "password": password}, file)
+
+def delete_wifi_config():
+    try:
+        os.remove(CONFIG_FILE)
+        print("WiFi config dihapus")
+    except OSError:
+        print("WiFi config belum ada")
+
+def halaman_wifi_manager(pesan=""):
+    html = f"""HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n
+    &lt;!DOCTYPE html&gt;
+    &lt;html&gt;
+    &lt;head&gt;
+        &lt;title&gt;WiFi Setup&lt;/title&gt;
+        &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
+        &lt;style&gt;
+            body {{font-family: Arial; background: #e8f5e9; padding: 20px;}}
+            .card {{background: white; max-width: 380px; margin: 30px auto; padding: 22px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.15);}}
+            h2 {{text-align: center; color: #1b5e20;}}
+            input {{width: 100%; padding: 11px; margin: 8px 0 15px 0; box-sizing: border-box;}}
+            button {{width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;}}
+            p.msg {{text-align: center; color: #d32f2f; font-weight: bold;}}
+        &lt;/style&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+        &lt;div class="card"&gt;
+            &lt;h2&gt;Smart Hydroponic&lt;/h2&gt;
+            &lt;p class="msg"&gt;{pesan}&lt;/p&gt;
+            &lt;form action="/save" method="get"&gt;
+                SSID WiFi:&lt;br&gt;
+                &lt;input name="ssid" required&gt;&lt;br&gt;
+                Password WiFi:&lt;br&gt;
+                &lt;input name="password" type="password"&gt;&lt;br&gt;
+                &lt;button type="submit"&gt;Simpan WiFi&lt;/button&gt;
+            &lt;/form&gt;
+        &lt;/div&gt;
+    &lt;/body&gt;
+    &lt;/html&gt;
+    """
+    return html
+
+def start_wifi_manager(led_mqtt):
+    print("\n====================\n WIFI MANAGER AKTIF\n====================")
+    led_mqtt.value(0)
+    gc.collect()
+
+    ap = network.WLAN(network.AP_IF)
+    ap.active(True)
+    try:
+        ap.config(essid=AP_SSID, password=AP_PASSWORD, authmode=network.AUTH_WPA_WPA2_PSK)
+    except Exception:
+        ap.config(essid=AP_SSID) # Fallback jika modul tidak mendukung enkripsi tertentu
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("", 80))
+    server.listen(1)
+
+    while True:
+        conn = None
+        try:
+            gc.collect()
+            conn, addr = server.accept()
+            request = conn.recv(1024).decode()
+
+            if "GET /save?" in request:
+                path = request.split(" ")[1]
+                query = path.split("?", 1)[1]
+                ssid_baru = get_param(query, "ssid")
+                password_baru = get_param(query, "password")
+
+                if ssid_baru != "":
+                    save_wifi_config(ssid_baru, password_baru)
+                    conn.send(halaman_wifi_manager("WiFi tersimpan. ESP restart...").encode())
+                    conn.close()
+                    time.sleep(2)
+                    machine.reset()
+                else:
+                    conn.send(halaman_wifi_manager("SSID tidak boleh kosong!").encode())
+            else:
+                conn.send(halaman_wifi_manager().encode())
+
+            conn.close()
+        except Exception as e:
+            if conn:
+                conn.close()
+
+def connect_wifi(led_mqtt):
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    ssid, password = load_wifi_config()
+
+    if ssid is None:
+        print("Config WiFi tidak ditemukan. Menjalankan Mode AP.")
+        start_wifi_manager(led_mqtt)
+
+    print("Menghubungkan ke WiFi:", ssid)
+    wlan.connect(ssid, password)
+    timeout = WIFI_TIMEOUT
+
+    while not wlan.isconnected() and timeout &gt; 0:
+        time.sleep(1)
+        timeout -= 1
+
+    if wlan.isconnected():
+        print("WiFi terhubung. IP:", wlan.ifconfig()[0])
+        try:
+            network.WLAN(network.AP_IF).active(False)
+        except Exception:
+            pass
+        return wlan
+    else:
+        print("Gagal terhubung ke WiFi. Menjalankan Mode AP.")
+        start_wifi_manager(led_mqtt)</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan Detail Coding</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>import network</code></h3>
+              <p>Library utama untuk mengatur WiFi pada ESP8266. Mode <code>STA_IF</code> dipakai untuk konek ke router, sedangkan <code>AP_IF</code> dipakai untuk membuat hotspot setup.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>CONFIG_FILE = "wifi_config.json"</code></h3>
+              <p>Nama file tempat ESP menyimpan SSID dan password. Setelah file ini ada, ESP bisa langsung konek WiFi tanpa mengisi form lagi.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>AP_SSID</code> dan <code>AP_PASSWORD</code></h3>
+              <p>Ini adalah nama dan password hotspot sementara dari ESP. Pengguna connect ke hotspot ini, lalu membuka <code>192.168.4.1</code> untuk mengisi WiFi asli.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>url_decode(text)</code></h3>
+              <p>Form HTML mengirim spasi sebagai <code>+</code> dan karakter khusus sebagai kode persen seperti <code>%20</code>. Fungsi ini mengubah format URL tersebut kembali menjadi teks normal.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>load_wifi_config()</code></h3>
+              <p>Fungsi ini membaca <code>wifi_config.json</code> dengan <code>ujson.load()</code>, lalu mengambil <code>ssid</code> dan <code>password</code>. Jika SSID ada, fungsi mengembalikan pasangan <code>ssid, password</code>. Jika file belum ada atau SSID kosong, fungsi mengembalikan <code>None, None</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>save_wifi_config(ssid, password)</code></h3>
+              <p>SSID dan password langsung disimpan ke <code>wifi_config.json</code> memakai <code>ujson.dump()</code>. Setelah tersimpan, ESP bisa memakai data ini lagi saat boot berikutnya.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>delete_wifi_config()</code></h3>
+              <p>Fungsi ini menghapus file konfigurasi WiFi. Dipakai saat pengguna mengirim command RESET_WIFI dari Telegram/MQTT.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>halaman_wifi_manager(pesan="")</code></h3>
+              <p>Fungsi ini menghasilkan halaman HTML sederhana berisi form SSID dan password. Teks <code>pesan</code> dipakai untuk menampilkan status seperti "WiFi tersimpan" atau "SSID tidak boleh kosong".</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>get_param(query, name)</code></h3>
+              <p>Fungsi ini membaca query string dari form, memecahnya berdasarkan tanda <code>&amp;</code>, lalu mencari parameter sesuai nama yang diminta, misalnya <code>ssid</code> atau <code>password</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>start_wifi_manager(led_mqtt)</code></h3>
+              <p>Fungsi ini mengaktifkan mode access point, mematikan LED MQTT, menjalankan garbage collection, membuat web server di port 80, menerima request browser, menyimpan data WiFi, lalu restart ESP setelah konfigurasi berhasil.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>server.accept()</code></h3>
+              <p>Baris ini menunggu koneksi dari browser. Setelah browser mengirim request, ESP membaca request tersebut dan menentukan apakah pengguna membuka halaman utama atau menekan tombol simpan.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>connect_wifi(led_mqtt)</code></h3>
+              <p>Fungsi utama yang dipanggil oleh <code>main.py</code>. Fungsi ini membaca config, masuk WiFi Manager jika SSID belum ada, mencoba konek ke router, mematikan mode AP jika berhasil, lalu mengembalikan object <code>wlan</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>WIFI_TIMEOUT</code></h3>
+              <p>Nilai ini menjadi hitung mundur koneksi WiFi. Jika ESP belum terkoneksi saat timeout habis, program menjalankan <code>start_wifi_manager(led_mqtt)</code> agar pengguna bisa memasukkan SSID dan password baru.</p>
+            </div>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+</body>
+</html>

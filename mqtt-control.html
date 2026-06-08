@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MQTT Control - SmartHydro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="code-section">
+    <div class="section-title">
+      <span class="code-label">MicroPython / MQTT</span>
+      <h2>Coding MQTT Control</h2>
+      <p>Bagian ini disesuaikan dengan <code>main.py</code> terbaru: koneksi broker, subscribe command, publish payload JSON, dan pengecekan pesan MQTT di loop utama.</p>
+    </div>
+
+    <div class="code-layout">
+      <aside class="code-menu">
+        <a href="esp-ultrasonic.html">ESP Ultrasonic</a>
+        <a class="active" href="mqtt-control.html">MQTT Control</a>
+        <a href="thingspeak.html">ThingSpeak</a>
+        <a href="n8n-code.html">n8n Code</a>
+        <a href="n8n-mqtt-processing.html">n8n MQTT Processing</a>
+        <a href="device-test.html">Device Test</a>
+        <a href="credentials-config.html">Credential Config</a>
+        <a href="all-coding.html">Semua Coding</a>
+        <a href="wifi-manager.html">WiFi Manager</a>
+        <a href="index.html#coding">Kembali Home</a>
+      </aside>
+
+      <article class="code-content">
+        <div class="code-header">
+          <div>
+            <h1>Publish Data dan Subscribe Perintah</h1>
+            <p>MQTT dipakai untuk komunikasi dua arah: ESP mengirim data sensor dan menerima perintah pompa dari n8n/Telegram.</p>
+          </div>
+        </div>
+
+        <div class="explain-grid">
+          <div class="explain-card">
+            <h3>Publish</h3>
+            <p>ESP mengirim payload JSON ke <code>hanif/smarthydro</code> berisi suhu, kelembaban, jarak air, level air, status pompa, dan mode pompa.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Subscribe</h3>
+            <p>ESP subscribe ke <code>hanif/smarthydro/control</code> untuk menerima command <code>ON</code>, <code>OFF</code>, <code>AUTO</code>, dan <code>RESET_WIFI</code>.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Loop MQTT</h3>
+            <p>Versi terbaru mengecek pesan dengan <code>mqtt_client.check_msg()</code> langsung di loop utama agar command cepat diproses.</p>
+          </div>
+        </div>
+
+        <div class="code-box tall-code">
+<pre><code>from umqtt.simple import MQTTClient
+import machine
+import time
+import wifimgr
+
+MQTT_SERVER = "broker.emqx.io"
+MQTT_PORT = 1883
+MQTT_TOPIC = b"hanif/smarthydro"
+MQTT_CONTROL_TOPIC = b"hanif/smarthydro/control"
+CLIENT_ID = b"ESP8266-SmartHydro"
+
+mqtt_client = None
+
+def mqtt_callback(topic, msg):
+    global status_pompa, mode_pompa
+
+    try:
+        pesan = msg.decode().strip().upper()
+    except Exception:
+        print("Pesan MQTT tidak bisa dibaca")
+        return
+
+    print("\nPesan MQTT masuk")
+    print("Topic:", topic)
+    print("Pesan:", pesan)
+
+    if topic != MQTT_CONTROL_TOPIC:
+        return
+
+    if "RESET_WIFI" in pesan:
+        print("Reset WiFi...")
+        wifimgr.delete_wifi_config()
+        time.sleep(1)
+        machine.reset()
+
+    elif "AUTO" in pesan:
+        mode_pompa = "AUTO"
+        print("Mode pompa AUTO")
+
+    elif "OFF" in pesan or "MATI" in pesan:
+        mode_pompa = "MANUAL"
+        status_pompa = "OFF"
+        RELAY_PIN.value(RELAY_OFF)
+        update_led_pompa()
+        print("Pompa dimatikan manual")
+        print("Relay value:", RELAY_PIN.value())
+
+    elif "ON" in pesan or "NYALA" in pesan:
+        mode_pompa = "MANUAL"
+        status_pompa = "ON"
+        RELAY_PIN.value(RELAY_ON)
+        update_led_pompa()
+        print("Pompa dinyalakan manual")
+        print("Relay value:", RELAY_PIN.value())
+
+    else:
+        print("Perintah tidak dikenal")
+
+def connect_mqtt():
+    global mqtt_client
+
+    try:
+        print("\nMenghubungkan ke MQTT...")
+        mqtt_client = MQTTClient(
+            CLIENT_ID,
+            MQTT_SERVER,
+            port=MQTT_PORT,
+            keepalive=60
+        )
+
+        mqtt_client.set_callback(mqtt_callback)
+        mqtt_client.connect()
+        mqtt_client.subscribe(MQTT_CONTROL_TOPIC)
+
+        LED_MQTT.value(1)
+
+        print("MQTT terhubung")
+        print("Publish topic :", MQTT_TOPIC)
+        print("Control topic :", MQTT_CONTROL_TOPIC)
+
+        return mqtt_client
+
+    except Exception as e:
+        print("MQTT gagal:", e)
+        LED_MQTT.value(0)
+        return None
+
+def kirim_mqtt():
+    global mqtt_client
+
+    if mqtt_client is None:
+        mqtt_client = connect_mqtt()
+
+    if mqtt_client is None:
+        print("MQTT belum terhubung")
+        return
+
+    payload = (
+        f'{{"temperature":{suhu},"humidity":{kelembaban},"distance_cm":{jarak_air_cm},'
+        f'"water_level_percent":{level_air_persen},"pump_status":"{status_pompa}","pump_mode":"{mode_pompa}"}}'
+    )
+
+    try:
+        mqtt_client.publish(MQTT_TOPIC, payload)
+        LED_MQTT.value(1)
+
+        print("\nMQTT terkirim:")
+        print(payload)
+
+    except Exception as e:
+        print("MQTT publish gagal:", e)
+        LED_MQTT.value(0)
+
+        try:
+            mqtt_client.disconnect()
+        except Exception:
+            pass
+
+        mqtt_client = None
+
+# Bagian ini berada di while True pada main.py
+if mqtt_client is not None:
+    try:
+        mqtt_client.check_msg()
+    except Exception as e:
+        print("Gagal cek MQTT:", e)
+        LED_MQTT.value(0)
+
+        try:
+            mqtt_client.disconnect()
+        except Exception:
+            pass
+
+        mqtt_client = None</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan Detail Coding</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>MQTT_SERVER</code>, <code>MQTT_PORT</code>, dan <code>CLIENT_ID</code></h3>
+              <p>Bagian ini menentukan broker MQTT yang dipakai, port koneksi, dan identitas ESP8266. <code>CLIENT_ID</code> harus unik agar broker tidak bingung membedakan perangkat.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>MQTT_TOPIC</code> dan <code>MQTT_CONTROL_TOPIC</code></h3>
+              <p><code>MQTT_TOPIC</code> dipakai untuk mengirim data sensor. <code>MQTT_CONTROL_TOPIC</code> dipakai untuk menerima perintah dari n8n/Telegram.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>msg.decode().strip().upper()</code></h3>
+              <p>Pesan MQTT awalnya berupa byte. <code>decode()</code> mengubahnya menjadi teks, <code>strip()</code> menghapus spasi, dan <code>upper()</code> membuat command tetap terbaca walaupun diketik kecil atau besar.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Command <code>RESET_WIFI</code></h3>
+              <p>Jika pesan berisi RESET_WIFI, ESP menghapus konfigurasi WiFi melalui <code>wifimgr.delete_wifi_config()</code>, menunggu 1 detik, lalu restart dengan <code>machine.reset()</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Command <code>AUTO</code></h3>
+              <p>Mengubah <code>mode_pompa</code> menjadi AUTO sehingga pompa kembali dikendalikan oleh sensor ultrasonic dan batas air.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Command <code>OFF</code> dan <code>ON</code></h3>
+              <p>Kedua command ini mengubah mode menjadi MANUAL. OFF mematikan relay, ON menyalakan relay, lalu LED indikator pompa diperbarui dengan <code>update_led_pompa()</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>connect_mqtt()</code></h3>
+              <p>Fungsi ini membuat MQTT client, memasang callback, connect ke broker, subscribe ke topic control, menyalakan LED MQTT, dan mencetak topic publish/control ke serial monitor.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>payload = (... f-string ...)</code></h3>
+              <p>Payload terbaru memakai f-string agar data sensor masuk langsung ke format JSON. Field yang dikirim sama dengan yang dibaca n8n: <code>temperature</code>, <code>humidity</code>, <code>distance_cm</code>, <code>water_level_percent</code>, <code>pump_status</code>, dan <code>pump_mode</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>mqtt_client.publish(MQTT_TOPIC, payload)</code></h3>
+              <p>Baris ini mengirim JSON ke broker. Jika berhasil LED MQTT menyala, jika gagal client diputus dan dibuat <code>None</code> supaya bisa connect ulang.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>mqtt_client.check_msg()</code></h3>
+              <p>Pada main terbaru, pengecekan pesan MQTT dilakukan langsung di loop utama. Ini membuat ESP sering mengecek command tanpa menunggu proses kirim data selesai.</p>
+            </div>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+</body>
+</html>

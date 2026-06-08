@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>n8n Code - SmartHydro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="code-section">
+    <div class="section-title">
+      <span class="code-label">n8n / JavaScript</span>
+      <h2>Coding n8n</h2>
+      <p>Bagian ini disesuaikan dengan payload MQTT terbaru dari ESP8266 untuk membuat pesan Telegram dan memetakan command Telegram.</p>
+    </div>
+
+    <div class="code-layout">
+      <aside class="code-menu">
+        <a href="esp-ultrasonic.html">ESP Ultrasonic</a>
+        <a href="mqtt-control.html">MQTT Control</a>
+        <a href="thingspeak.html">ThingSpeak</a>
+        <a class="active" href="n8n-code.html">n8n Code</a>
+        <a href="n8n-mqtt-processing.html">n8n MQTT Processing</a>
+        <a href="device-test.html">Device Test</a>
+        <a href="credentials-config.html">Credential Config</a>
+        <a href="all-coding.html">Semua Coding</a>
+        <a href="wifi-manager.html">WiFi Manager</a>
+        <a href="index.html#coding">Kembali Home</a>
+      </aside>
+
+      <article class="code-content">
+        <div class="code-header">
+          <div>
+            <h1>Otomasi Telegram dan Alert</h1>
+            <p>n8n menjadi jembatan antara MQTT dan Telegram, sehingga data sensor bisa dikirim sebagai notifikasi.</p>
+          </div>
+        </div>
+
+        <div class="explain-grid">
+          <div class="explain-card">
+            <h3>Data MQTT</h3>
+            <p>Payload JSON dari ESP memakai data HC-SR04 pada field <code>distance_cm</code>. Jarak besar berarti air rendah, jarak kecil berarti air cukup atau penuh.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Alert</h3>
+            <p>Alert utama mengikuti logika HC-SR04: <code>distance_cm &gt;= 15</code> berarti air rendah, sedangkan <code>distance_cm &lt;= 8</code> berarti air cukup atau penuh.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Command</h3>
+            <p>Pesan Telegram seperti ON, OFF, AUTO, dan RESET_WIFI dipetakan ke topic MQTT control.</p>
+          </div>
+        </div>
+
+        <h2 class="subheading">Function Node: Format Monitoring</h2>
+        <div class="code-box">
+<pre><code>const data = JSON.parse($json.message || "{}");
+
+const temperature = data.temperature ?? "-";
+const humidity = data.humidity ?? "-";
+const distanceCm = data.distance_cm ?? "-";
+const levelAirPersen = data.water_level_percent ?? "-";
+const pumpStatus = data.pump_status ?? "-";
+const pumpMode = data.pump_mode ?? "-";
+
+let alert = "";
+
+if (Number(distanceCm) &gt;= 15) {
+  alert += "\nPERINGATAN: Jarak air tinggi, air rendah.";
+}
+
+if (Number(distanceCm) &lt;= 8) {
+  alert += "\nINFO: Air cukup / penuh.";
+}
+
+if (Number(temperature) &gt;= 34) {
+  alert += "\nPERINGATAN: Suhu terlalu tinggi.";
+}
+
+return [
+  {
+    json: {
+      text:
+        "Smart Hydroponic Monitoring\n" +
+        "Suhu: " + temperature + " C\n" +
+        "Kelembaban: " + humidity + " %\n" +
+        "Jarak HC-SR04: " + distanceCm + " cm\n" +
+        "Level air: " + levelAirPersen + " %\n" +
+        "Pompa: " + pumpStatus + "\n" +
+        "Mode: " + pumpMode +
+        alert
+    }
+  }
+];</code></pre>
+        </div>
+
+        <h2 class="subheading">Function Node: Telegram Command ke MQTT</h2>
+        <div class="code-box">
+<pre><code>const text = ($json.message?.text || "").trim().toUpperCase();
+
+let command = "";
+
+if (text === "/ON" || text === "ON" || text === "NYALA") {
+  command = "ON";
+} else if (text === "/OFF" || text === "OFF" || text === "MATI") {
+  command = "OFF";
+} else if (text === "/AUTO" || text === "AUTO") {
+  command = "AUTO";
+} else if (text === "/RESET_WIFI" || text === "RESET_WIFI") {
+  command = "RESET_WIFI";
+} else {
+  command = "UNKNOWN";
+}
+
+return [
+  {
+    json: {
+      topic: "hanif/smarthydro/control",
+      message: command
+    }
+  }
+];</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan Detail Coding</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>JSON.parse($json.message || "{}")</code></h3>
+              <p>n8n menerima payload MQTT terbaru dari ESP sebagai teks JSON. <code>JSON.parse()</code> mengubah teks tersebut menjadi object JavaScript. Jika pesan kosong, <code>{}</code> dipakai sebagai cadangan agar node tidak error.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>data.temperature ?? "-"</code></h3>
+              <p>Baris ini mengambil suhu dari field <code>temperature</code> yang dikirim oleh <code>kirim_mqtt()</code>. Operator <code>??</code> berarti jika nilai tidak ada atau null, tampilkan tanda minus.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>data.distance_cm</code></h3>
+              <p>Field ini berasal dari sensor HC-SR04/ultrasonic pada ESP8266. Inilah data utama untuk menentukan kondisi air: makin besar jaraknya, makin rendah permukaan air.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Variabel <code>alert</code></h3>
+              <p>Variabel ini awalnya kosong. Jika jarak ultrasonic menunjukkan air rendah atau suhu terlalu tinggi, teks peringatan ditambahkan ke pesan monitoring.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>Number(distanceCm) &gt;= 15</code></h3>
+              <p>Ini mengikuti batas pada ESP: jika jarak HC-SR04 lebih besar atau sama dengan 15 cm, permukaan air jauh dari sensor, berarti air rendah.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>Number(distanceCm) &lt;= 8</code></h3>
+              <p>Ini juga mengikuti batas pada ESP: jika jarak kurang dari atau sama dengan 8 cm, permukaan air dekat dengan sensor, berarti air cukup atau penuh.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>Number(temperature) &gt;= 34</code></h3>
+              <p>Suhu diubah menjadi angka dan dibandingkan dengan batas 34 C. Jika suhu melewati batas, pesan Telegram diberi peringatan suhu tinggi.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>return [{ json: { text: ... } }]</code></h3>
+              <p>n8n memakai format output berbentuk array item. Field <code>text</code> nanti bisa langsung dipakai oleh node Telegram untuk isi pesan.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>$json.message?.text</code></h3>
+              <p>Bagian ini mengambil teks dari pesan Telegram. Tanda <code>?.</code> mencegah error jika <code>message</code> tidak ada.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>trim().toUpperCase()</code></h3>
+              <p><code>trim()</code> menghapus spasi, sedangkan <code>toUpperCase()</code> membuat command menjadi huruf besar. Dengan begitu command <code>on</code>, <code>ON</code>, dan <code> On </code> tetap dikenali.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Mapping Command</h3>
+              <p>Blok <code>if</code> dan <code>else if</code> mengubah pesan Telegram menjadi command standar: ON, OFF, AUTO, RESET_WIFI, atau UNKNOWN.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>topic: "hanif/smarthydro/control"</code></h3>
+              <p>Output ini dikirim ke node MQTT Publish. Topic harus sama dengan topic yang disubscribe ESP agar command sampai ke perangkat.</p>
+            </div>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+</body>
+</html>

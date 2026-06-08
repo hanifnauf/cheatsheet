@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>n8n MQTT Processing - SmartHydro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="code-section">
+    <div class="section-title">
+      <span class="code-label">n8n / JavaScript</span>
+      <h2>n8n MQTT Processing</h2>
+      <p>Code node untuk membaca data dari MQTT Trigger, parse payload ESP8266, validasi sensor, dan membuat status emergency.</p>
+    </div>
+
+    <div class="code-layout">
+      <aside class="code-menu">
+        <a href="esp-ultrasonic.html">ESP Ultrasonic</a>
+        <a href="mqtt-control.html">MQTT Control</a>
+        <a href="thingspeak.html">ThingSpeak</a>
+        <a href="n8n-code.html">n8n Code</a>
+        <a class="active" href="n8n-mqtt-processing.html">n8n MQTT Processing</a>
+        <a href="device-test.html">Device Test</a>
+        <a href="credentials-config.html">Credential Config</a>
+        <a href="all-coding.html">Semua Coding</a>
+        <a href="wifi-manager.html">WiFi Manager</a>
+        <a href="index.html#coding">Kembali Home</a>
+      </aside>
+
+      <article class="code-content">
+        <div class="code-header">
+          <div>
+            <h1>Parsing MQTT dan Status Emergency</h1>
+            <p>Code ini cocok diletakkan pada node <strong>Code</strong> di n8n setelah MQTT Trigger.</p>
+          </div>
+        </div>
+
+        <div class="explain-grid">
+          <div class="explain-card">
+            <h3>Input</h3>
+            <p>Mengambil <code>topic</code> dan <code>message</code> dari MQTT Trigger. Jika payload memakai nama lain seperti <code>payload</code> atau <code>data</code>, code tetap mencoba membacanya.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Proses</h3>
+            <p>Payload diparse menjadi JSON, lalu nilai sensor diubah menjadi angka agar mudah divalidasi.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Output</h3>
+            <p>Output berisi data rapi untuk Data Table, Google Sheet, atau Telegram, termasuk status Normal/EMERGENCY.</p>
+          </div>
+        </div>
+
+        <div class="code-box tall-code">
+<pre><code>$input.first().json.message
+$input.first().json.topic
+
+// Ambil semua item dari MQTT Trigger
+const items = $input.all();
+
+const output = items.map(item =&gt; {
+  const topic = item.json.topic || "";
+
+  // Ambil payload dari MQTT Trigger
+  let message =
+    item.json.message ??
+    item.json.payload ??
+    item.json.data ??
+    "";
+
+  // Kalau payload masih Buffer/object aneh
+  if (message &amp;&amp; typeof message === "object" &amp;&amp; message.data) {
+    try {
+      message = Buffer.from(message.data).toString();
+    } catch (e) {
+      message = "";
+    }
+  }
+
+  // Parse JSON dari ESP8266
+  let data = {};
+
+  try {
+    if (typeof message === "string") {
+      data = JSON.parse(message.trim());
+    } else if (typeof message === "object" &amp;&amp; message !== null) {
+      data = message;
+    }
+  } catch (error) {
+    data = {};
+  }
+
+  // Ambil data sesuai coding ESP8266 terbaru
+  const suhu = Number(data.temperature);
+  const kelembaban = Number(data.humidity);
+  const jarakAir = Number(data.distance_cm);
+  const levelAir = Number(data.water_level_percent);
+
+  const pumpStatus = data.pump_status || "UNKNOWN";
+  const pumpMode = data.pump_mode || "UNKNOWN";
+
+  // Validasi angka
+  const suhuFinal = isNaN(suhu) ? null : suhu;
+  const kelembabanFinal = isNaN(kelembaban) ? null : kelembaban;
+  const jarakAirFinal = isNaN(jarakAir) ? null : jarakAir;
+  const levelAirFinal = isNaN(levelAir) ? null : levelAir;
+
+  // Waktu data masuk
+  const tanggal = new Date().toISOString();
+
+  // Deteksi kondisi darurat
+  const emergencyMessages = [];
+
+  // Cek level air berdasarkan persen
+  if (levelAirFinal !== null) {
+    if (levelAirFinal &lt;= 5) {
+      emergencyMessages.push("🚨 Air hampir habis!");
+    } else if (levelAirFinal &lt;= 20) {
+      emergencyMessages.push("⚠️ Level air rendah!");
+    } else if (levelAirFinal &gt;= 95) {
+      emergencyMessages.push("🌊 Tangki hampir penuh!");
+    }
+  }
+
+  // Cek jarak ultrasonic
+  // Jarak besar = air rendah
+  // Jarak kecil = air penuh
+  if (jarakAirFinal !== null) {
+    if (jarakAirFinal &gt;= 15) {
+      emergencyMessages.push("⚠️ Jarak air tinggi, air rendah!");
+    } else if (jarakAirFinal &lt;= 8) {
+      emergencyMessages.push("✅ Air cukup / penuh");
+    }
+  }
+
+  // Cek suhu
+  if (suhuFinal !== null) {
+    if (suhuFinal &gt;= 35) {
+      emergencyMessages.push("🔥 Suhu terlalu tinggi!");
+    } else if (suhuFinal &lt;= 10) {
+      emergencyMessages.push("❄️ Suhu terlalu rendah!");
+    }
+  }
+
+  // Cek kelembaban
+  if (kelembabanFinal !== null) {
+    if (kelembabanFinal &lt;= 20) {
+      emergencyMessages.push("⚠️ Kelembaban terlalu rendah!");
+    } else if (kelembabanFinal &gt;= 90) {
+      emergencyMessages.push("💧 Kelembaban terlalu tinggi!");
+    }
+  }
+
+  // Status akhir
+  let statusFinal = "Normal";
+
+  if (emergencyMessages.length &gt; 0) {
+    const hanyaInfoAirCukup =
+      emergencyMessages.length === 1 &amp;&amp;
+      emergencyMessages[0].includes("Air cukup");
+
+    statusFinal = hanyaInfoAirCukup ? "Normal" : "EMERGENCY";
+  }
+
+  // Output untuk Data Table / Google Sheet / Telegram
+  return {
+    json: {
+      Tanggal: tanggal,
+      Topic: topic,
+
+      Suhu_C: suhuFinal,
+      Kelembaban_persen: kelembabanFinal,
+
+      Jarak_Air_cm: jarakAirFinal,
+      Level_Air_persen: levelAirFinal,
+
+      Status_Pompa: pumpStatus,
+      Mode_Pompa: pumpMode,
+
+      Status: statusFinal,
+      Pesan_Emergency: emergencyMessages.length &gt; 0
+        ? emergencyMessages.join(" | ")
+        : "-"
+    }
+  };
+});
+
+return output;</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan Detail Coding</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>$input.first().json.message</code> dan <code>$input.first().json.topic</code></h3>
+              <p>Dua baris ini biasanya dipakai untuk mengecek isi data pertama dari MQTT Trigger. <code>message</code> adalah payload dari ESP8266, sedangkan <code>topic</code> adalah jalur MQTT tempat pesan diterima.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>const items = $input.all();</code></h3>
+              <p>Mengambil semua item yang masuk ke node Code. Ini penting karena MQTT Trigger bisa mengirim satu atau beberapa item, dan code akan memproses semuanya.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>const output = items.map(item =&gt; { ... })</code></h3>
+              <p><code>map()</code> memproses setiap item MQTT satu per satu, lalu mengubahnya menjadi format output baru yang lebih rapi.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>const topic = item.json.topic || "";</code></h3>
+              <p>Mengambil topic dari data MQTT. Jika topic kosong atau tidak ada, digunakan string kosong agar code tidak error.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Pengambilan Payload</h3>
+              <p><code>item.json.message ?? item.json.payload ?? item.json.data ?? ""</code> berarti code mencoba membaca payload dari beberapa kemungkinan nama field. Operator <code>??</code> memilih nilai pertama yang bukan <code>null</code> atau <code>undefined</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Konversi Buffer</h3>
+              <p>Jika payload berbentuk object dengan properti <code>data</code>, code mencoba mengubahnya menjadi string memakai <code>Buffer.from(message.data).toString()</code>. Ini berguna ketika MQTT Trigger mengirim data dalam bentuk Buffer.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>let data = {};</code></h3>
+              <p>Membuat object kosong sebagai nilai awal. Jika parsing JSON gagal, <code>data</code> tetap object kosong sehingga bagian berikutnya tetap aman dijalankan.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Parse JSON</h3>
+              <p>Jika <code>message</code> berupa string, code menjalankan <code>JSON.parse(message.trim())</code>. <code>trim()</code> menghapus spasi atau enter di awal dan akhir payload sebelum diparse.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Payload Sudah Object</h3>
+              <p>Jika <code>message</code> sudah berbentuk object, code langsung memakai object tersebut sebagai <code>data</code>. Ini membuat code fleksibel untuk beberapa format input n8n.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>catch (error) { data = {}; }</code></h3>
+              <p>Jika payload bukan JSON valid, error ditangkap dan <code>data</code> dikosongkan. Tujuannya agar workflow n8n tidak berhenti hanya karena satu pesan rusak.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Ambil Data Sensor</h3>
+              <p><code>Number(data.temperature)</code>, <code>Number(data.humidity)</code>, <code>Number(data.distance_cm)</code>, dan <code>Number(data.water_level_percent)</code> mengambil nilai dari payload ESP8266 lalu mengubahnya menjadi angka.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Status Pompa dan Mode Pompa</h3>
+              <p><code>data.pump_status || "UNKNOWN"</code> berarti jika status pompa tidak ada, tampilkan <code>UNKNOWN</code>. Hal yang sama dilakukan untuk <code>pump_mode</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Validasi Angka</h3>
+              <p><code>isNaN()</code> mengecek apakah hasil konversi bukan angka. Jika bukan angka, nilai final dibuat <code>null</code>. Ini membuat output lebih jelas daripada menampilkan <code>NaN</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>const tanggal = new Date().toISOString();</code></h3>
+              <p>Membuat timestamp saat data diproses. Format ISO cocok untuk database, Data Table, Google Sheet, dan proses filter waktu.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>const emergencyMessages = [];</code></h3>
+              <p>Membuat array kosong untuk menampung semua pesan kondisi darurat. Satu data bisa menghasilkan lebih dari satu pesan, misalnya air rendah dan suhu tinggi.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Cek Level Air Persen</h3>
+              <p>Jika <code>levelAirFinal</code> tidak null, code mengecek tiga kondisi: air hampir habis saat kurang dari atau sama dengan 5 persen, air rendah saat kurang dari atau sama dengan 20 persen, dan tangki hampir penuh saat lebih dari atau sama dengan 95 persen.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Cek Jarak Ultrasonic</h3>
+              <p>Jarak besar berarti permukaan air jauh dari sensor, sehingga air rendah. Jarak kecil berarti permukaan air dekat sensor, sehingga air cukup atau penuh.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Cek Suhu</h3>
+              <p>Jika suhu lebih dari atau sama dengan 35 C, sistem memberi peringatan suhu tinggi. Jika suhu kurang dari atau sama dengan 10 C, sistem memberi peringatan suhu rendah.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Cek Kelembaban</h3>
+              <p>Kelembaban kurang dari atau sama dengan 20 persen dianggap terlalu rendah. Kelembaban lebih dari atau sama dengan 90 persen dianggap terlalu tinggi.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>let statusFinal = "Normal";</code></h3>
+              <p>Status awal selalu Normal. Status baru berubah menjadi EMERGENCY jika ada pesan darurat yang benar-benar perlu diperhatikan.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>hanyaInfoAirCukup</code></h3>
+              <p>Bagian ini mengecek apakah satu-satunya pesan hanya "Air cukup". Jika iya, status tetap Normal karena itu bukan kondisi bahaya.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>statusFinal = hanyaInfoAirCukup ? "Normal" : "EMERGENCY";</code></h3>
+              <p>Ini adalah ternary operator. Jika <code>hanyaInfoAirCukup</code> benar, status tetap Normal. Jika salah, status berubah menjadi EMERGENCY.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Object Output</h3>
+              <p>Bagian <code>return { json: { ... } }</code> membuat format output n8n. Semua field diberi nama yang jelas seperti <code>Suhu_C</code>, <code>Level_Air_persen</code>, dan <code>Pesan_Emergency</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>emergencyMessages.join(" | ")</code></h3>
+              <p>Jika ada lebih dari satu pesan emergency, semua pesan digabung menjadi satu teks dengan pemisah garis vertikal. Jika tidak ada pesan, output diisi <code>-</code>.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>return output;</code></h3>
+              <p>Mengembalikan semua item hasil proses ke node berikutnya. Output ini bisa langsung disambungkan ke Google Sheets, Data Table, Telegram, atau node lain.</p>
+            </div>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+</body>
+</html>

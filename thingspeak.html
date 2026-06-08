@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThingSpeak - SmartHydro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <main class="code-section">
+    <div class="section-title">
+      <span class="code-label">MicroPython / HTTP</span>
+      <h2>Coding ThingSpeak</h2>
+      <p>Bagian ini disesuaikan dengan <code>main.py</code> terbaru untuk mengirim data sensor ke ThingSpeak memakai HTTP GET.</p>
+    </div>
+
+    <div class="code-layout">
+      <aside class="code-menu">
+        <a href="esp-ultrasonic.html">ESP Ultrasonic</a>
+        <a href="mqtt-control.html">MQTT Control</a>
+        <a class="active" href="thingspeak.html">ThingSpeak</a>
+        <a href="n8n-code.html">n8n Code</a>
+        <a href="n8n-mqtt-processing.html">n8n MQTT Processing</a>
+        <a href="device-test.html">Device Test</a>
+        <a href="credentials-config.html">Credential Config</a>
+        <a href="all-coding.html">Semua Coding</a>
+        <a href="wifi-manager.html">WiFi Manager</a>
+        <a href="index.html#coding">Kembali Home</a>
+      </aside>
+
+      <article class="code-content">
+        <div class="code-header">
+          <div>
+            <h1>Kirim Monitoring ke Dashboard</h1>
+            <p>ThingSpeak menerima nilai melalui URL update, lalu menampilkannya sebagai grafik per field.</p>
+          </div>
+        </div>
+
+        <div class="explain-grid">
+          <div class="explain-card">
+            <h3>Field 1-3</h3>
+            <p><code>field1</code> untuk suhu, <code>field2</code> untuk kelembaban, dan <code>field3</code> untuk level air.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Field 4-5</h3>
+            <p><code>field4</code> menyimpan status pompa sebagai angka. <code>field5</code> menyimpan mode pompa sebagai angka.</p>
+          </div>
+          <div class="explain-card">
+            <h3>Interval</h3>
+            <p>Pada <code>main.py</code> terbaru, pengiriman ThingSpeak mengikuti <code>INTERVAL_SEND = 20</code> detik.</p>
+          </div>
+        </div>
+
+        <div class="code-box">
+<pre><code>import socket
+
+WRITE_API_KEY = "SHKXBHKDZLDLFT2X"
+THINGSPEAK_HOST = "api.thingspeak.com"
+
+def kirim_thingspeak():
+    pompa_value = 1 if status_pompa == "ON" else 0
+    mode_value = 1 if mode_pompa == "AUTO" else 0
+
+    path = f"/update?api_key={WRITE_API_KEY}&amp;field1={suhu}&amp;field2={kelembaban}&amp;field3={level_air_persen}&amp;field4={pompa_value}&amp;field5={mode_value}"
+
+    s = None
+
+    try:
+        print("\nMengirim ke ThingSpeak...")
+        addr = socket.getaddrinfo(THINGSPEAK_HOST, 80)[0][-1]
+        s = socket.socket()
+        s.settimeout(5)
+        s.connect(addr)
+
+        request = f"GET {path} HTTP/1.1\r\nHost: {THINGSPEAK_HOST}\r\nConnection: close\r\n\r\n"
+        s.send(request.encode())
+        s.recv(128)
+
+        print("ThingSpeak terkirim")
+
+    except Exception as e:
+        print("ThingSpeak gagal:", e)
+
+    finally:
+        if s:
+            try:
+                s.close()
+            except Exception:
+                pass</code></pre>
+        </div>
+
+        <section class="line-explain">
+          <h2>Penjelasan Detail Coding</h2>
+          <div class="detail-list">
+            <div class="detail-item">
+              <h3><code>import socket</code></h3>
+              <p>Socket dipakai untuk membuat koneksi HTTP manual dari ESP8266 ke server ThingSpeak. Cara ini ringan dan cocok untuk MicroPython.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>WRITE_API_KEY</code></h3>
+              <p>API key ini adalah kunci channel ThingSpeak. ESP harus mengirim key tersebut agar data masuk ke channel yang benar.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>pompa_value</code> dan <code>mode_value</code></h3>
+              <p>Status pompa dan mode pompa diubah menjadi angka supaya mudah dibuat grafik. Pompa ON menjadi 1, OFF menjadi 0. Mode AUTO menjadi 1, MANUAL menjadi 0.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>path = f"/update?..."</code></h3>
+              <p>Versi terbaru memakai f-string. Nilai sensor langsung dimasukkan ke URL ThingSpeak: suhu, kelembaban, level air, status pompa, dan mode pompa.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>socket.getaddrinfo(THINGSPEAK_HOST, 80)</code></h3>
+              <p>Fungsi ini mencari alamat IP dari domain <code>api.thingspeak.com</code> pada port 80 agar ESP tahu server tujuan.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>s.settimeout(5)</code></h3>
+              <p>Timeout 5 detik mencegah ESP terlalu lama menunggu jika internet atau server sedang bermasalah.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>request = f"GET {path} ..."</code></h3>
+              <p>Request HTTP GET dibuat lengkap dengan path, host, dan connection close. Setelah request dikirim, ThingSpeak membaca parameter field dari URL.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>s.send()</code> dan <code>s.recv(128)</code></h3>
+              <p><code>s.send()</code> mengirim request ke ThingSpeak. <code>s.recv(128)</code> membaca sebagian respons server sebagai tanda bahwa server sudah membalas.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>finally</code> dan <code>s.close()</code></h3>
+              <p>Bagian <code>finally</code> memastikan socket ditutup setelah selesai, baik pengiriman berhasil maupun gagal. Ini penting agar memori ESP8266 tidak cepat penuh.</p>
+            </div>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+</body>
+</html>
