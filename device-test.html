@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Device Test - SmartHydro</title>
+  <title>Separated Code - SmartHydro</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <main class="code-section">
     <div class="section-title">
-      <span class="code-label">MicroPython / Testing</span>
-      <h2>Coding Test Device</h2>
-      <p>Kumpulan coding sederhana untuk mengetes HC-SR04, DHT11, relay, dan LED sebelum menjalankan program utama.</p>
+      <span class="code-label">MicroPython / Modular</span>
+      <h2>Separated Coding Project</h2>
+      <p>Versi coding project yang sudah dipisah menjadi beberapa file agar lebih rapi, mudah dites, dan mudah dijelaskan saat exam.</p>
     </div>
 
     <div class="code-layout">
@@ -22,7 +22,7 @@
         <a href="thingspeak.html">ThingSpeak</a>
         <a href="n8n-code.html">n8n Code</a>
         <a href="n8n-mqtt-processing.html">n8n MQTT Processing</a>
-        <a href="device-test.html" class="active">Device Test</a>
+        <a href="device-test.html" class="active">Separated Code</a>
         <a href="credentials-config.html">Credential Config</a>
         <a href="all-coding.html">Semua Coding</a>
         <a href="wifi-manager.html">WiFi Manager</a>
@@ -32,212 +32,656 @@
       <article class="code-content">
         <div class="code-header">
           <div>
-            <h1>Test Perangkat Satu per Satu</h1>
-            <p>Gunakan file test ini untuk memastikan wiring dan komponen bekerja sebelum digabung ke <strong>main.py</strong>.</p>
+            <h1>Struktur File Terpisah</h1>
+            <p>Gunakan struktur ini jika ingin memisahkan program utama menjadi modul WiFi, config, hardware, sensor, pompa, MQTT, ThingSpeak, dan main loop.</p>
           </div>
         </div>
 
         <div class="explain-grid">
           <div class="explain-card">
-            <h3>HC-SR04</h3>
-            <p>Test jarak ultrasonic dari pin TRIG D0/GPIO16 dan ECHO D2/GPIO4.</p>
+            <h3>Lebih Rapi</h3>
+            <p>Setiap file punya tugas sendiri, jadi lebih mudah dicari saat debugging.</p>
           </div>
           <div class="explain-card">
-            <h3>DHT11</h3>
-            <p>Test suhu dan kelembaban dari pin D5/GPIO14.</p>
+            <h3>Mudah Dites</h3>
+            <p>Sensor, pompa, MQTT, dan ThingSpeak bisa dicek dari modul masing-masing.</p>
           </div>
           <div class="explain-card">
-            <h3>Relay</h3>
-            <p>Test ON/OFF relay pada pin D1/GPIO5. Program memakai relay aktif LOW.</p>
+            <h3>Exam Friendly</h3>
+            <p>Alur program lebih mudah dijelaskan karena setiap bagian punya nama file yang jelas.</p>
           </div>
         </div>
 
-        <h2 class="subheading">1. Test HC-SR04 / Ultrasonic</h2>
-        <div class="notice-box">
-          <h3>Catatan Wiring</h3>
-          <p>Pin ECHO HC-SR04 harus memakai pembagi tegangan karena output ECHO 5V, sedangkan ESP8266 hanya aman menerima 3.3V.</p>
-        </div>
+        <h2 class="subheading">1. wifimgr.py</h2>
         <div class="code-box">
-<pre><code>import time
+<textarea class="code-textarea tall-code-area" readonly>import network
+import time
+import ujson
+import socket
+import os
+import gc
 import machine
 from machine import Pin
 
-TRIG_PIN = Pin(16, Pin.OUT)  # D0 / GPIO16
-ECHO_PIN = Pin(4, Pin.IN)    # D2 / GPIO4
+CONFIG_FILE = "wifi_config.json"
+AP_SSID = "SmartHydro-Setup"
+AP_PASSWORD = "12345678"
+WIFI_TIMEOUT = 20
 
-def baca_jarak_once():
-    TRIG_PIN.value(0)
-    time.sleep_us(2)
+def url_decode(text):
+    text = text.replace("+", " ")
+    result = ""
+    i = 0
+    while i < len(text):
+        if text[i] == "%" and i + 2 < len(text):
+            try:
+                result += chr(int(text[i + 1:i + 3], 16))
+                i += 3
+            except ValueError:
+                result += text[i]
+                i += 1
+        else:
+            result += text[i]
+            i += 1
+    return result
 
-    TRIG_PIN.value(1)
-    time.sleep_us(10)
-    TRIG_PIN.value(0)
+def get_param(query, name):
+    items = query.split("&")
+    for item in items:
+        if "=" in item:
+            key, value = item.split("=", 1)
+            if key == name:
+                return url_decode(value)
+    return ""
 
-    durasi = machine.time_pulse_us(ECHO_PIN, 1, 30000)
-
-    if durasi &lt; 0:
-        return None
-
-    jarak_cm = durasi / 58
-    return jarak_cm
-
-while True:
-    jarak = baca_jarak_once()
-
-    if jarak is None:
-        print("Ultrasonic gagal membaca jarak")
-    else:
-        print("Jarak HC-SR04:", round(jarak, 1), "cm")
-
-    time.sleep(1)</code></pre>
-        </div>
-
-        <section class="line-explain">
-          <h2>Penjelasan HC-SR04</h2>
-          <div class="detail-list">
-            <div class="detail-item">
-              <h3><code>TRIG_PIN</code> dan <code>ECHO_PIN</code></h3>
-              <p><code>TRIG_PIN</code> mengirim sinyal pemicu 10 microsecond. <code>ECHO_PIN</code> menerima pantulan suara dari sensor.</p>
-            </div>
-            <div class="detail-item">
-              <h3><code>machine.time_pulse_us(ECHO_PIN, 1, 30000)</code></h3>
-              <p>Baris ini menghitung lama sinyal ECHO bernilai HIGH. Timeout 30000 microsecond mencegah program menunggu terlalu lama jika sensor tidak merespons.</p>
-            </div>
-            <div class="detail-item">
-              <h3><code>durasi / 58</code></h3>
-              <p>Rumus ini mengubah waktu pantulan ultrasonic menjadi jarak dalam cm. Jika jarak makin besar, berarti permukaan air makin jauh dari sensor.</p>
-            </div>
-          </div>
-        </section>
-
-        <h2 class="subheading">2. Test DHT11</h2>
-        <div class="code-box">
-<pre><code>import time
-import dht
-from machine import Pin
-
-DHT_PIN = Pin(14)  # D5 / GPIO14
-dht_sensor = dht.DHT11(DHT_PIN)
-
-while True:
+def load_wifi_config():
     try:
-        dht_sensor.measure()
-        suhu = dht_sensor.temperature()
-        kelembaban = dht_sensor.humidity()
+        with open(CONFIG_FILE, "r") as file:
+            data = ujson.load(file)
+        ssid = data.get("ssid", "")
+        password = data.get("password", "")
+        if ssid != "":
+            return ssid, password
+    except OSError:
+        pass
+    return None, None
 
-        print("Suhu:", suhu, "C")
-        print("Kelembaban:", kelembaban, "%")
-        print("--------------------")
+def save_wifi_config(ssid, password):
+    with open(CONFIG_FILE, "w") as file:
+        ujson.dump({"ssid": ssid, "password": password}, file)
 
-    except Exception as e:
-        print("Gagal membaca DHT11:", e)
+def delete_wifi_config():
+    try:
+        os.remove(CONFIG_FILE)
+        print("WiFi config dihapus")
+    except OSError:
+        print("WiFi config belum ada")
 
-    time.sleep(2)</code></pre>
+def halaman_wifi_manager(pesan=""):
+    html = f"""HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>WiFi Setup</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {{font-family: Arial; background: #e8f5e9; padding: 20px;}}
+            .card {{background: white; max-width: 380px; margin: 30px auto; padding: 22px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.15);}}
+            h2 {{text-align: center; color: #1b5e20;}}
+            input {{width: 100%; padding: 11px; margin: 8px 0 15px 0; box-sizing: border-box;}}
+            button {{width: 100%; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;}}
+            p.msg {{text-align: center; color: #d32f2f; font-weight: bold;}}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>Smart Hydroponic</h2>
+            <p class="msg">{pesan}</p>
+            <form action="/save" method="get">
+                SSID WiFi:<br>
+                <input name="ssid" required><br>
+                Password WiFi:<br>
+                <input name="password" type="password"><br>
+                <button type="submit">Simpan WiFi</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
+def start_wifi_manager(led_mqtt):
+    print("\n====================\n WIFI MANAGER AKTIF\n====================")
+    led_mqtt.value(0)
+    gc.collect()
+    
+    ap = network.WLAN(network.AP_IF)
+    ap.active(True)
+    try:
+        ap.config(essid=AP_SSID, password=AP_PASSWORD, authmode=network.AUTH_WPA_WPA2_PSK)
+    except Exception:
+        ap.config(essid=AP_SSID) # Fallback jika modul tidak mendukung enkripsi tertentu
+    
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("", 80))
+    server.listen(1)
+    
+    while True:
+        conn = None
+        try:
+            gc.collect()
+            conn, addr = server.accept()
+            request = conn.recv(1024).decode()
+            
+            if "GET /save?" in request:
+                path = request.split(" ")[1]
+                query = path.split("?", 1)[1]
+                ssid_baru = get_param(query, "ssid")
+                password_baru = get_param(query, "password")
+                
+                if ssid_baru != "":
+                    save_wifi_config(ssid_baru, password_baru)
+                    conn.send(halaman_wifi_manager("WiFi tersimpan. ESP restart...").encode())
+                    conn.close()
+                    time.sleep(2)
+                    machine.reset()
+                else:
+                    conn.send(halaman_wifi_manager("SSID tidak boleh kosong!").encode())
+            else:
+                conn.send(halaman_wifi_manager().encode())
+            
+            conn.close()
+        except Exception as e:
+            if conn:
+                conn.close()
+
+def connect_wifi(led_mqtt):
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    ssid, password = load_wifi_config()
+    
+    if ssid is None:
+        print("Config WiFi tidak ditemukan. Menjalankan Mode AP.")
+        start_wifi_manager(led_mqtt)
+    
+    print("Menghubungkan ke WiFi:", ssid)
+    wlan.connect(ssid, password)
+    timeout = WIFI_TIMEOUT
+    
+    while not wlan.isconnected() and timeout > 0:
+        time.sleep(1)
+        timeout -= 1
+        
+    if wlan.isconnected():
+        print("WiFi terhubung. IP:", wlan.ifconfig()[0])
+        try:
+            network.WLAN(network.AP_IF).active(False)
+        except Exception:
+            pass
+        return wlan
+    else:
+        print("Gagal terhubung ke WiFi. Menjalankan Mode AP.")
+        start_wifi_manager(led_mqtt)</textarea>
         </div>
 
-        <section class="line-explain">
-          <h2>Penjelasan DHT11</h2>
-          <div class="detail-list">
-            <div class="detail-item">
-              <h3><code>dht.DHT11(DHT_PIN)</code></h3>
-              <p>Membuat object sensor DHT11 pada pin D5/GPIO14. Object ini dipakai untuk membaca suhu dan kelembaban.</p>
-            </div>
-            <div class="detail-item">
-              <h3><code>dht_sensor.measure()</code></h3>
-              <p>Meminta sensor melakukan pembacaan baru. Setelah baris ini, nilai suhu dan kelembaban bisa diambil.</p>
-            </div>
-            <div class="detail-item">
-              <h3><code>time.sleep(2)</code></h3>
-              <p>DHT11 tidak perlu dibaca terlalu cepat. Jeda 2 detik membuat pembacaan lebih stabil.</p>
-            </div>
-          </div>
-        </section>
-
-        <h2 class="subheading">3. Test Relay Pompa</h2>
-        <div class="notice-box">
-          <h3>Keamanan</h3>
-          <p>Jika relay terhubung ke pompa atau tegangan tinggi, pastikan wiring COM/NO benar dan jangan menyentuh kabel saat alat menyala.</p>
-        </div>
+        <h2 class="subheading">2. config.py</h2>
         <div class="code-box">
-<pre><code>import time
-from machine import Pin
+<textarea class="code-textarea short-code" readonly>MQTT_SERVER = "broker.emqx.io"
+MQTT_PORT = 1883
+MQTT_TOPIC = b"hanif/smarthydro"
+MQTT_CONTROL_TOPIC = b"hanif/smarthydro/control"
+CLIENT_ID = b"ESP8266-SmartHydro"
 
-RELAY_PIN = Pin(5, Pin.OUT)  # D1 / GPIO5
+WRITE_API_KEY = "ISI_API_KEY_THINGSPEAK_KAMU"
+THINGSPEAK_HOST = "api.thingspeak.com"
+
+TINGGI_WADAH_CM = 20
+BATAS_JARAK_AIR_RENDAH = 15
+BATAS_JARAK_AIR_CUKUP = 8
 
 RELAY_ON = 0
 RELAY_OFF = 1
 
-while True:
-    print("Relay ON")
-    RELAY_PIN.value(RELAY_ON)
-    time.sleep(3)
-
-    print("Relay OFF")
-    RELAY_PIN.value(RELAY_OFF)
-    time.sleep(3)</code></pre>
+INTERVAL_SEND = 20
+INTERVAL_SENSOR = 5</textarea>
         </div>
 
-        <section class="line-explain">
-          <h2>Penjelasan Relay</h2>
-          <div class="detail-list">
-            <div class="detail-item">
-              <h3><code>RELAY_ON = 0</code></h3>
-              <p>Relay module pada project ini aktif LOW. Nilai 0 menyalakan relay, sedangkan nilai 1 mematikan relay.</p>
-            </div>
-            <div class="detail-item">
-              <h3><code>time.sleep(3)</code></h3>
-              <p>Relay dinyalakan 3 detik dan dimatikan 3 detik agar perubahan mudah diamati dari suara klik relay atau LED indikator relay.</p>
-            </div>
-          </div>
-        </section>
-
-        <h2 class="subheading">4. Test LED Indikator</h2>
+        <h2 class="subheading">3. hardware.py</h2>
         <div class="code-box">
-<pre><code>import time
-from machine import Pin
+<textarea class="code-textarea short-code" readonly>from machine import Pin
+import dht
+from config import RELAY_OFF
 
-LED_MQTT = Pin(12, Pin.OUT)       # D6 / GPIO12
-LED_POMPA_OFF = Pin(13, Pin.OUT)  # D7 / GPIO13
-LED_POMPA_ON = Pin(15, Pin.OUT)   # D8 / GPIO15
+DHT_PIN = Pin(14)
+RELAY_PIN = Pin(5, Pin.OUT)
 
-while True:
-    print("Test LED MQTT")
-    LED_MQTT.value(1)
-    LED_POMPA_OFF.value(0)
-    LED_POMPA_ON.value(0)
-    time.sleep(1)
+TRIG_PIN = Pin(16, Pin.OUT)
+ECHO_PIN = Pin(4, Pin.IN)
 
-    print("Test LED Pompa OFF")
+LED_MQTT = Pin(12, Pin.OUT)
+LED_POMPA_OFF = Pin(13, Pin.OUT)
+LED_POMPA_ON = Pin(15, Pin.OUT)
+
+dht_sensor = dht.DHT11(DHT_PIN)
+
+def setup_pin():
+    RELAY_PIN.value(RELAY_OFF)
+    TRIG_PIN.value(0)
     LED_MQTT.value(0)
     LED_POMPA_OFF.value(1)
-    LED_POMPA_ON.value(0)
-    time.sleep(1)
+    LED_POMPA_ON.value(0)</textarea>
+        </div>
 
-    print("Test LED Pompa ON")
-    LED_MQTT.value(0)
-    LED_POMPA_OFF.value(0)
-    LED_POMPA_ON.value(1)
-    time.sleep(1)</code></pre>
+        <h2 class="subheading">4. sensor.py</h2>
+        <div class="code-box">
+<textarea class="code-textarea tall-code-area" readonly>import time
+import machine
+from hardware import TRIG_PIN, ECHO_PIN, dht_sensor
+from config import TINGGI_WADAH_CM
+
+def baca_jarak_once():
+    try:
+        TRIG_PIN.value(0)
+        time.sleep_us(2)
+
+        TRIG_PIN.value(1)
+        time.sleep_us(10)
+        TRIG_PIN.value(0)
+
+        durasi = machine.time_pulse_us(ECHO_PIN, 1, 30000)
+
+        if durasi < 0:
+            return None
+
+        return durasi / 58
+
+    except Exception as e:
+        print("Error ultrasonic:", e)
+        return None
+
+def baca_ultrasonic():
+    total = 0
+    jumlah = 0
+
+    for i in range(3):
+        jarak = baca_jarak_once()
+
+        if jarak is not None and 1 < jarak < 400:
+            total += jarak
+            jumlah += 1
+
+        time.sleep_ms(70)
+
+    if jumlah == 0:
+        return None
+
+    return total / jumlah
+
+def hitung_level_air(jarak):
+    if jarak is None:
+        return 0
+
+    tinggi_air = TINGGI_WADAH_CM - jarak
+
+    if tinggi_air < 0:
+        tinggi_air = 0
+    elif tinggi_air > TINGGI_WADAH_CM:
+        tinggi_air = TINGGI_WADAH_CM
+
+    return int((tinggi_air * 100) / TINGGI_WADAH_CM)
+
+def baca_sensor(state):
+    try:
+        dht_sensor.measure()
+        state["suhu"] = dht_sensor.temperature()
+        state["kelembaban"] = dht_sensor.humidity()
+    except Exception as e:
+        print("Gagal baca DHT:", e)
+
+    jarak = baca_ultrasonic()
+
+    if jarak is not None:
+        state["jarak_air_cm"] = round(jarak, 1)
+        state["level_air_persen"] = hitung_level_air(state["jarak_air_cm"])
+    else:
+        print("Gagal baca ultrasonic")
+        state["jarak_air_cm"] = 0
+        state["level_air_persen"] = 0
+
+    print("\nData sensor")
+    print("Suhu            :", state["suhu"], "C")
+    print("Kelembaban      :", state["kelembaban"], "%")
+    print("Jarak air       :", state["jarak_air_cm"], "cm")
+    print("Level air       :", state["level_air_persen"], "%")
+    print("Mode pompa      :", state["mode_pompa"])
+    print("Status pompa    :", state["status_pompa"])</textarea>
+        </div>
+
+        <h2 class="subheading">5. pump.py</h2>
+        <div class="code-box">
+<textarea class="code-textarea" readonly>from hardware import RELAY_PIN, LED_POMPA_OFF, LED_POMPA_ON
+from config import RELAY_ON, RELAY_OFF, BATAS_JARAK_AIR_RENDAH, BATAS_JARAK_AIR_CUKUP
+
+def update_led_pompa(state):
+    if state["status_pompa"] == "ON":
+        LED_POMPA_ON.value(1)
+        LED_POMPA_OFF.value(0)
+    else:
+        LED_POMPA_ON.value(0)
+        LED_POMPA_OFF.value(1)
+
+def set_pompa(state, status):
+    if status == "ON":
+        RELAY_PIN.value(RELAY_ON)
+        state["status_pompa"] = "ON"
+    else:
+        RELAY_PIN.value(RELAY_OFF)
+        state["status_pompa"] = "OFF"
+
+    update_led_pompa(state)
+    print("Status pompa:", state["status_pompa"])
+    print("Relay value :", RELAY_PIN.value())
+
+def kontrol_pompa_otomatis(state):
+    if state["mode_pompa"] != "AUTO":
+        return
+
+    if state["jarak_air_cm"] == 0:
+        print("Data ultrasonic tidak valid, pompa tidak diubah")
+        return
+
+    if state["jarak_air_cm"] > BATAS_JARAK_AIR_RENDAH:
+        set_pompa(state, "ON")
+        print("Auto: air rendah, pompa ON")
+
+    elif state["jarak_air_cm"] < BATAS_JARAK_AIR_CUKUP:
+        set_pompa(state, "OFF")
+        print("Auto: air cukup, pompa OFF")
+
+    else:
+        print("Auto: level air sedang, status tetap")</textarea>
+        </div>
+
+        <h2 class="subheading">6. mqtt_service.py</h2>
+        <div class="code-box">
+<textarea class="code-textarea tall-code-area" readonly>import time
+import machine
+import wifimgr
+from umqtt.simple import MQTTClient
+from config import MQTT_SERVER, MQTT_PORT, MQTT_TOPIC, MQTT_CONTROL_TOPIC, CLIENT_ID
+from hardware import LED_MQTT
+from pump import set_pompa
+
+def buat_callback(state):
+    def mqtt_callback(topic, msg):
+        try:
+            pesan = msg.decode().strip().upper()
+        except Exception:
+            print("Pesan MQTT tidak bisa dibaca")
+            return
+
+        print("\nPesan MQTT masuk")
+        print("Topic:", topic)
+        print("Pesan:", pesan)
+
+        if topic != MQTT_CONTROL_TOPIC:
+            return
+
+        if "RESET_WIFI" in pesan:
+            print("Reset WiFi...")
+            wifimgr.delete_wifi_config()
+            time.sleep(1)
+            machine.reset()
+
+        elif "AUTO" in pesan:
+            state["mode_pompa"] = "AUTO"
+            print("Mode pompa AUTO")
+
+        elif "OFF" in pesan or "MATI" in pesan:
+            state["mode_pompa"] = "MANUAL"
+            set_pompa(state, "OFF")
+            print("Pompa dimatikan manual")
+
+        elif "ON" in pesan or "NYALA" in pesan:
+            state["mode_pompa"] = "MANUAL"
+            set_pompa(state, "ON")
+            print("Pompa dinyalakan manual")
+
+        else:
+            print("Perintah tidak dikenal")
+
+    return mqtt_callback
+
+def connect_mqtt(state):
+    try:
+        print("\nMenghubungkan ke MQTT...")
+
+        client = MQTTClient(
+            CLIENT_ID,
+            MQTT_SERVER,
+            port=MQTT_PORT,
+            keepalive=60
+        )
+
+        client.set_callback(buat_callback(state))
+        client.connect()
+        client.subscribe(MQTT_CONTROL_TOPIC)
+
+        LED_MQTT.value(1)
+
+        print("MQTT terhubung")
+        print("Publish topic :", MQTT_TOPIC)
+        print("Control topic :", MQTT_CONTROL_TOPIC)
+
+        return client
+
+    except Exception as e:
+        print("MQTT gagal:", e)
+        LED_MQTT.value(0)
+        return None
+
+def kirim_mqtt(client, state):
+    if client is None:
+        client = connect_mqtt(state)
+
+    if client is None:
+        print("MQTT belum terhubung")
+        return None
+
+    payload = (
+        f'{{"temperature":{state["suhu"]},"humidity":{state["kelembaban"]},'
+        f'"distance_cm":{state["jarak_air_cm"]},'
+        f'"water_level_percent":{state["level_air_persen"]},'
+        f'"pump_status":"{state["status_pompa"]}",'
+        f'"pump_mode":"{state["mode_pompa"]}"}}'
+    )
+
+    try:
+        client.publish(MQTT_TOPIC, payload)
+        LED_MQTT.value(1)
+
+        print("\nMQTT terkirim:")
+        print(payload)
+
+        return client
+
+    except Exception as e:
+        print("MQTT publish gagal:", e)
+        LED_MQTT.value(0)
+
+        try:
+            client.disconnect()
+        except Exception:
+            pass
+
+        return None</textarea>
+        </div>
+
+        <h2 class="subheading">7. thingspeak.py</h2>
+        <div class="code-box">
+<textarea class="code-textarea" readonly>import socket
+from config import WRITE_API_KEY, THINGSPEAK_HOST
+
+def kirim_thingspeak(state):
+    pompa_value = 1 if state["status_pompa"] == "ON" else 0
+    mode_value = 1 if state["mode_pompa"] == "AUTO" else 0
+
+    path = (
+        f"/update?api_key={WRITE_API_KEY}"
+        f"&field1={state['suhu']}"
+        f"&field2={state['kelembaban']}"
+        f"&field3={state['level_air_persen']}"
+        f"&field4={pompa_value}"
+        f"&field5={mode_value}"
+    )
+
+    s = None
+
+    try:
+        print("\nMengirim ke ThingSpeak...")
+        addr = socket.getaddrinfo(THINGSPEAK_HOST, 80)[0][-1]
+        s = socket.socket()
+        s.settimeout(5)
+        s.connect(addr)
+
+        request = f"GET {path} HTTP/1.1\r\nHost: {THINGSPEAK_HOST}\r\nConnection: close\r\n\r\n"
+        s.send(request.encode())
+        s.recv(128)
+
+        print("ThingSpeak terkirim")
+
+    except Exception as e:
+        print("ThingSpeak gagal:", e)
+
+    finally:
+        if s:
+            try:
+                s.close()
+            except Exception:
+                pass</textarea>
+        </div>
+
+        <h2 class="subheading">8. main.py</h2>
+        <div class="code-box">
+<textarea class="code-textarea tall-code-area" readonly>import time
+import gc
+import wifimgr
+
+from config import INTERVAL_SEND, INTERVAL_SENSOR
+from hardware import setup_pin, LED_MQTT
+from sensor import baca_sensor
+from pump import kontrol_pompa_otomatis
+from mqtt_service import connect_mqtt, kirim_mqtt
+from thingspeak import kirim_thingspeak
+
+state = {
+    "suhu": 0,
+    "kelembaban": 0,
+    "jarak_air_cm": 0,
+    "level_air_persen": 0,
+    "status_pompa": "OFF",
+    "mode_pompa": "AUTO"
+}
+
+setup_pin()
+
+print("\nMemulai Smart Hydroponic")
+print("DHT11    : D5 / GPIO14")
+print("Relay    : D1 / GPIO5")
+print("TRIG     : D0 / GPIO16")
+print("ECHO     : D2 / GPIO4")
+print("LED MQTT : D6 / GPIO12")
+print("LED OFF  : D7 / GPIO13")
+print("LED ON   : D8 / GPIO15")
+
+wlan = wifimgr.connect_wifi(LED_MQTT)
+mqtt_client = connect_mqtt(state)
+
+last_send = time.time()
+last_sensor = 0
+
+print("\nSmart Hydroponic siap")
+
+while True:
+    gc.collect()
+
+    if not wlan.isconnected():
+        print("\nWiFi terputus, mencoba konek ulang...")
+        LED_MQTT.value(0)
+
+        try:
+            if mqtt_client:
+                mqtt_client.disconnect()
+        except Exception:
+            pass
+
+        mqtt_client = None
+        wlan = wifimgr.connect_wifi(LED_MQTT)
+
+    if mqtt_client is not None:
+        try:
+            mqtt_client.check_msg()
+        except Exception as e:
+            print("Gagal cek MQTT:", e)
+            LED_MQTT.value(0)
+
+            try:
+                mqtt_client.disconnect()
+            except Exception:
+                pass
+
+            mqtt_client = None
+
+    sekarang = time.time()
+
+    if sekarang - last_sensor >= INTERVAL_SENSOR:
+        baca_sensor(state)
+        kontrol_pompa_otomatis(state)
+        last_sensor = sekarang
+
+    if sekarang - last_send >= INTERVAL_SEND:
+        mqtt_client = kirim_mqtt(mqtt_client, state)
+        kirim_thingspeak(state)
+        last_send = sekarang
+
+    time.sleep_ms(200)</textarea>
         </div>
 
         <section class="line-explain">
-          <h2>Urutan Test yang Disarankan</h2>
+          <h2>Penjelasan Struktur Terpisah</h2>
           <div class="detail-list">
             <div class="detail-item">
-              <h3>1. Test DHT11</h3>
-              <p>Pastikan suhu dan kelembaban muncul di serial monitor.</p>
+              <h3><code>config.py</code></h3>
+              <p>Menyimpan credential, batas jarak air, mode relay, dan interval. File lain mengambil nilai dari sini supaya konfigurasi tidak tercecer.</p>
             </div>
             <div class="detail-item">
-              <h3>2. Test HC-SR04</h3>
-              <p>Gerakkan tangan atau objek di depan sensor. Nilai jarak harus berubah.</p>
+              <h3><code>hardware.py</code></h3>
+              <p>Menyimpan deklarasi pin dan fungsi <code>setup_pin()</code>. Semua modul memakai pin dari file ini agar pin mapping konsisten.</p>
             </div>
             <div class="detail-item">
-              <h3>3. Test Relay</h3>
-              <p>Pastikan relay berbunyi klik dan LED relay berubah saat ON/OFF.</p>
+              <h3><code>sensor.py</code></h3>
+              <p>Fokus pada DHT11 dan HC-SR04. Data sensor disimpan ke dictionary <code>state</code> agar bisa dipakai oleh pompa, MQTT, dan ThingSpeak.</p>
             </div>
             <div class="detail-item">
-              <h3>4. Test LED</h3>
-              <p>Pastikan LED MQTT, LED Pompa OFF, dan LED Pompa ON sesuai pin mapping.</p>
+              <h3><code>pump.py</code></h3>
+              <p>Fokus pada relay dan LED pompa. Fungsi <code>set_pompa()</code> dipakai untuk kontrol manual dari MQTT maupun kontrol otomatis dari sensor.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>mqtt_service.py</code></h3>
+              <p>Mengatur koneksi MQTT, callback command, publish data sensor, dan reconnect jika publish gagal.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>thingspeak.py</code></h3>
+              <p>Mengirim data dari <code>state</code> ke field ThingSpeak menggunakan HTTP GET.</p>
+            </div>
+            <div class="detail-item">
+              <h3><code>main.py</code></h3>
+              <p>Menjadi pusat alur program: konek WiFi, connect MQTT, baca sensor per interval, kontrol pompa, kirim MQTT, kirim ThingSpeak, dan cek command masuk.</p>
+            </div>
+            <div class="detail-item">
+              <h3>Catatan Nama File</h3>
+              <p>Nama file harus sama dengan import. Karena <code>main.py</code> memakai <code>from mqtt_service import ...</code>, file MQTT sebaiknya bernama <code>mqtt_service.py</code>.</p>
             </div>
           </div>
         </section>

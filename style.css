@@ -624,6 +624,26 @@ footer {
   font-family: Consolas, Monaco, monospace;
 }
 
+.code-textarea {
+  width: 100%;
+  min-height: 380px;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #d1fae5;
+  font: 13px/1.7 Consolas, Monaco, monospace;
+  white-space: pre;
+}
+
+.code-textarea.short-code {
+  min-height: 220px;
+}
+
+.code-textarea.tall-code-area {
+  min-height: 620px;
+}
+
 @media (max-width: 850px) {
   .code-layout {
     grid-template-columns: 1fr;
